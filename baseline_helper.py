@@ -71,7 +71,7 @@ def run(cfg: TrainConfig, mode: str):
                     optimizer.zero_grad(set_to_none=True)
                     step += 1
 
-                    if use_qat and (step % cfg.log_scale_params_freq == 0):
+                    if mode=='qat' and (step % cfg.log_scale_params_freq == 0):
                         stats = log_scale_params(model, step=step, verbose=False)
                         wandb.log(stats, step=step)
 
