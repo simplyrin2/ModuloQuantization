@@ -1,6 +1,6 @@
-from transformers import GPT2LMHeadModel, GPT2TokenizerFast, infer_device
+from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 
-device = infer_device()
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = "openai-community/gpt2-large"
 model = GPT2LMHeadModel.from_pretrained(model_id).to(device)
 tokenizer = GPT2TokenizerFast.from_pretrained(model_id)
