@@ -424,7 +424,7 @@ class TrainConfig:
     quantize_input: bool = False
     learnable_scale: bool = True
     init_scale: float = 0.05  # typical small initial scale; calibration adjusts it
-    per_channel: bool = False
+    per_channel: bool = True
     calibrate_batches: int = 20
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     save_dir: str = "./saved_models_scale"
