@@ -48,3 +48,5 @@ for begin_loc in tqdm(range(0, seq_len, stride)):
 
 avg_nll = nll_sum / n_tokens  # average negative log-likelihood per token
 ppl = torch.exp(avg_nll)
+
+print(f"Test PPL: {ppl.item():.2f}")
