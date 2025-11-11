@@ -2,7 +2,7 @@ from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model_id = "openai-community/gpt2-large"
+model_id = "gpt2"
 model = GPT2LMHeadModel.from_pretrained(model_id).to(device)
 tokenizer = GPT2TokenizerFast.from_pretrained(model_id)
 
