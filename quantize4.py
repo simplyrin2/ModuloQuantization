@@ -487,7 +487,7 @@ def plot_weight_distributions(model: nn.Module, out_dir: str, epoch: int):
 
                 # Plot 1: float W vs dequant Ŵ
                 fig1, ax1 = plt.subplots(1, 1, figsize=(7, 5))
-                ax1.hist(w.flatten().numpy(), bins=100, alpha=0.6, label="float W")
+                ax1.hist(w.flatten().numpy(), bins=100, alpha=0.8, label="float W")
                 ax1.hist(w_hat.flatten().numpy(), bins=100, alpha=0.6, label="dequant Ŵ")
                 ax1.set_title(f"{name} float vs dequant (epoch {epoch})")
                 ax1.set_xlabel("value")
