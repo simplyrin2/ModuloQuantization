@@ -539,7 +539,7 @@ def main():
     tokenized.set_format(type="torch")
 
     train_dataset = tokenized["train"]
-    val_dataset = tokenized["validation"]
+    val_dataset = tokenized["test"]
 
     def collate_fn(batch):
         return collate_for_lm(batch, tokenizer, max_length=None)
