@@ -483,23 +483,32 @@ def plot_weight_distributions(model: nn.Module, out_dir: str, epoch: int):
         if isinstance(module, QuantLinear):
             try:
                 w, q, w_hat = _compute_weight_quant_triplet(module)
-                fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-                # float weights
-                ax.hist(w.flatten().numpy(), bins=100, alpha=0.5, label="float W")
-                # integer q (discrete bins centered on ints)
+                safe_name = name.replace(".", "_")
+
+                # Plot 1: float W vs dequant Ŵ
+                fig1, ax1 = plt.subplots(1, 1, figsize=(7, 5))
+                ax1.hist(w.flatten().numpy(), bins=100, alpha=0.6, label="float W")
+                ax1.hist(w_hat.flatten().numpy(), bins=100, alpha=0.6, label="dequant Ŵ")
+                ax1.set_title(f"{name} float vs dequant (epoch {epoch})")
+                ax1.set_xlabel("value")
+                ax1.set_ylabel("count")
+                ax1.legend()
+                fig1.tight_layout()
+                fig1.savefig(os.path.join(out_dir, f"{safe_name}_float_dequant_epoch{epoch}.png"), dpi=150)
+                plt.close(fig1)
+
+                # Plot 2: integer Q distribution (separate)
+                fig2, ax2 = plt.subplots(1, 1, figsize=(7, 5))
                 qmax = module.w_quant.qmax
                 q_bins = np.arange(-qmax - 0.5, qmax + 1.5, 1.0)
-                ax.hist(q.flatten().numpy(), bins=q_bins, alpha=0.5, label="int Q")
-                # dequantized weights
-                ax.hist(w_hat.flatten().numpy(), bins=100, alpha=0.5, label="dequant Ŵ")
-                ax.set_title(f"{name} weight distributions (epoch {epoch})")
-                ax.set_xlabel("value")
-                ax.set_ylabel("count")
-                ax.legend()
-                fig.tight_layout()
-                safe_name = name.replace(".", "_")
-                fig.savefig(os.path.join(out_dir, f"{safe_name}_weights_hist_epoch{epoch}.png"), dpi=150)
-                plt.close(fig)
+                ax2.hist(q.flatten().numpy(), bins=q_bins, alpha=0.8, color="tab:green")
+                ax2.set_title(f"{name} integer Q (epoch {epoch})")
+                ax2.set_xlabel("integer level")
+                ax2.set_ylabel("count")
+                fig2.tight_layout()
+                fig2.savefig(os.path.join(out_dir, f"{safe_name}_intQ_epoch{epoch}.png"), dpi=150)
+                plt.close(fig2)
+
             except Exception as e:
                 print(f"[plot_weight_distributions] Skipped {name}: {e}")
 
