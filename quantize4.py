@@ -185,7 +185,7 @@ class QuantLinear(nn.Module):
         return F.linear(x_q, w_q, self.bias)
 
     @torch.no_grad()
-    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.5):
+    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.25):
         """Calibrate λ from data statistics (per-tensor or per-channel).
            We set λ �~I~H percentile(|x|)."""
         # Activations
@@ -807,7 +807,7 @@ def main():
     print("\nInitial quantization parameters after calibration:")
     log_quantization_params(model, step=0, verbose=True)
 
-    analysis_dir = os.path.join(cfg.save_dir, "analysis3")
+    analysis_dir = os.path.join(cfg.save_dir, "analysis4")
     dump_and_plot_scales(model, analysis_dir, epoch=0)
     plot_weight_distributions(model, analysis_dir, epoch=0)
     plot_weight_channel_distributions(model, analysis_dir, epoch=0, channels_per_layer=4)
