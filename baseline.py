@@ -446,7 +446,6 @@ def main():
         tokenizer.add_special_tokens({"pad_token": "[PAD]"})
     model = GPT2LMHeadModel.from_pretrained(cfg.model_name)
     model.resize_token_embeddings(len(tokenizer))
-    model.to(device)
 
     # dataset
     ds = load_dataset(cfg.dataset_name, cfg.dataset_config)
@@ -486,6 +485,7 @@ def main():
         bits=cfg.bits,
         skip_keys=[],
     )
+    model.to(device)
 
     # optimizer & scheduler
     no_decay = ["bias", "LayerNorm.weight", "LayerNorm.bias"]
