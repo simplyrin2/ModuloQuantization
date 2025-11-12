@@ -719,6 +719,7 @@ class TrainConfig:
     save_dir: str = "./saved_models"
     log_quant_params_freq: int = 100
     bits: int = 8  # number of quantization bits
+    percentile: float = 0.999  # for calibration
 
 # --------------------------
 
@@ -805,8 +806,8 @@ def main():
     # Log initial quantization parameters
     print("\nInitial quantization parameters after calibration:")
     log_quantization_params(model, step=0, verbose=True)
-    
-    analysis_dir = os.path.join(cfg.save_dir, "analysis2")
+
+    analysis_dir = os.path.join(cfg.save_dir, "analysis3")
     dump_and_plot_scales(model, analysis_dir, epoch=0)
     plot_weight_distributions(model, analysis_dir, epoch=0)
     plot_weight_channel_distributions(model, analysis_dir, epoch=0, channels_per_layer=4)
