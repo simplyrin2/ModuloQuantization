@@ -185,7 +185,7 @@ class QuantLinear(nn.Module):
         return F.linear(x_q, w_q, self.bias)
 
     @torch.no_grad()
-    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.25):
+    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.8):
         """Calibrate λ from data statistics (per-tensor or per-channel).
            We set λ �~I~H percentile(|x|)."""
         # Activations
@@ -249,7 +249,7 @@ def replace_linear_with_quantlinear(module: nn.Module,
 # --------------------------
 @torch.no_grad()
 def calibrate_model_modulus(model: nn.Module, loader: DataLoader, device: torch.device,
-                            num_batches: int = 20, percentile: float = 0.999):
+                            num_batches: int = 20, percentile: float = 0.8):
     """
     Run a short eval pass to collect activations per QuantLinear and calibrate λ.
     """
@@ -719,7 +719,7 @@ class TrainConfig:
     save_dir: str = "./saved_models"
     log_quant_params_freq: int = 100
     bits: int = 8  # number of quantization bits
-    percentile: float = 0.999  # for calibration
+    percentile: float = 0.75  # for calibration
 
 # --------------------------
 
@@ -800,8 +800,14 @@ def main():
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup, total_steps)
 
     # calibration pass
-    print(f"Calibrating {quant_mode} modulus parameters...")
-    calibrate_model_modulus(model, val_loader, device, num_batches=cfg.calibrate_batches)
+    print(f"Calibrating {quant_mode} modulus parameters (percentile={cfg.percentile})...")
+    calibrate_model_modulus(
+        model,
+        val_loader,
+        device,
+        num_batches=cfg.calibrate_batches,
+        percentile=cfg.percentile,
+    )
 
     # Log initial quantization parameters
     print("\nInitial quantization parameters after calibration:")
