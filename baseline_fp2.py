@@ -631,7 +631,7 @@ def main():
             # wandb.log({"train_loss": loss.item(), "step": step})
             
         # evaluation
-    # model.eval()
+    model.eval()
     # val_loss = 0.0
     # n_batches = 0
     # with torch.no_grad():
