@@ -632,23 +632,23 @@ def main():
             
         # evaluation
         model.eval()
-        # val_loss = 0.0
-        # n_batches = 0
-        # with torch.no_grad():
-        #     for batch in val_loader:
-        #         if batch is None:
-        #             continue
-        #         batch = {k: v.to(device) for k, v in batch.items()}
-        #         outputs = model(**batch)
-        #         val_loss += outputs.loss.item()
-        #         n_batches += 1
-        # if n_batches == 0:
-        #     avg_val_loss = float("nan")
-        #     ppl = float("nan")
-        # else:
-        #     avg_val_loss = val_loss / n_batches
-        #     ppl = math.exp(avg_val_loss)
-        avg_val_loss, ppl = evaluate_model(model)
+        val_loss = 0.0
+        n_batches = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                if batch is None:
+                    continue
+                batch = {k: v.to(device) for k, v in batch.items()}
+                outputs = model(**batch)
+                val_loss += outputs.loss.item()
+                n_batches += 1
+        if n_batches == 0:
+            avg_val_loss = float("nan")
+            ppl = float("nan")
+        else:
+            avg_val_loss = val_loss / n_batches
+            ppl = math.exp(avg_val_loss)
+        # avg_val_loss, ppl = evaluate_model(model)
 
         print(f"\nEpoch {epoch+1} | train_loss={epoch_loss/len(train_loader):.4f} | val_loss={avg_val_loss:.4f} | ppl={ppl:.4f}")
 
