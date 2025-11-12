@@ -567,6 +567,83 @@ def dump_and_plot_scales(model: nn.Module, out_dir: str, epoch: int, filename: s
         fig.tight_layout()
         fig.savefig(os.path.join(out_dir, f"lambda_activations_hist_epoch{epoch}.png"), dpi=150)
         plt.close(fig)
+        
+@torch.no_grad()
+def plot_weight_channel_distributions(
+    model: nn.Module,
+    out_dir: str,
+    epoch: int,
+    channels_per_layer: int = 4,
+    channel_indices=None,  # optional dict: {layer_name: [idx0, idx1, ...]}
+):
+    """
+    For per-channel quant, plot per-output-channel distributions:
+      - Overlay float W_c and dequant Ŵ_c in one plot, with vertical lines at ±λ_c
+      - Plot integer Q_c in a separate plot
+    Falls back to a single global λ if per-tensor quant is used.
+    """
+    out_dir = os.path.join(out_dir, "channels")
+    os.makedirs(out_dir, exist_ok=True)
+
+    for name, module in model.named_modules():
+        if not isinstance(module, QuantLinear):
+            continue
+
+        W = module.weight.detach().cpu()  # [out, in]
+        out_ch, in_ch = W.shape
+        safe_name = name.replace(".", "_")
+
+        # Determine indices to plot
+        if channel_indices and name in channel_indices:
+            idxs = [i for i in channel_indices[name] if 0 <= i < out_ch]
+        else:
+            # pick evenly spaced channels
+            if channels_per_layer >= out_ch:
+                idxs = list(range(out_ch))
+            else:
+                idxs = np.linspace(0, out_ch - 1, channels_per_layer, dtype=int).tolist()
+
+        # Prepare lambdas (per-channel or scalar)
+        lam_param = module.w_quant.lam.detach().cpu()
+        per_channel = module.per_channel and lam_param.numel() > 1
+        qmax = module.w_quant.qmax
+
+        for c in idxs:
+            w_c = W[c, :]  # [in]
+            lam_c = lam_param[c].item() if per_channel else float(lam_param.item())
+
+            # Compute folded, int q, and dequant for this channel
+            lam_t = torch.tensor(lam_c)
+            w_tilde = torch.remainder(w_c + lam_t, 2.0 * lam_t) - lam_t
+            quotient = torch.floor((w_c + lam_t) / (2.0 * lam_t))
+            S = lam_t / qmax
+            q_c = torch.clamp(torch.round(w_tilde / S), min=-qmax, max=qmax)
+            w_hat_c = S * q_c + quotient * (2.0 * lam_t)
+
+            # Plot 1: float vs dequant with ±λ lines
+            fig1, ax1 = plt.subplots(1, 1, figsize=(7, 5))
+            ax1.hist(w_c.numpy(), bins=100, alpha=0.8, label="float W[c]")
+            ax1.hist(w_hat_c.numpy(), bins=100, alpha=0.6, label="dequant Ŵ[c]")
+            ax1.axvline(-lam_c, color="red", linestyle="--", linewidth=1.5, label="-λ")
+            ax1.axvline(+lam_c, color="red", linestyle="--", linewidth=1.5, label="+λ")
+            ax1.set_title(f"{name} ch {c} (λ={lam_c:.4g}) | float vs dequant (epoch {epoch})")
+            ax1.set_xlabel("value")
+            ax1.set_ylabel("count")
+            ax1.legend()
+            fig1.tight_layout()
+            fig1.savefig(os.path.join(out_dir, f"{safe_name}_ch{c}_float_dequant_epoch{epoch}.png"), dpi=150)
+            plt.close(fig1)
+
+            # Plot 2: integer Q for this channel
+            fig2, ax2 = plt.subplots(1, 1, figsize=(7, 5))
+            q_bins = np.arange(-qmax - 0.5, qmax + 1.5, 1.0)
+            ax2.hist(q_c.numpy(), bins=q_bins, alpha=0.85, color="tab:green")
+            ax2.set_title(f"{name} ch {c} integer Q (epoch {epoch})")
+            ax2.set_xlabel("integer level")
+            ax2.set_ylabel("count")
+            fig2.tight_layout()
+            fig2.savefig(os.path.join(out_dir, f"{safe_name}_ch{c}_intQ_epoch{epoch}.png"), dpi=150)
+            plt.close(fig2)
 
 def evaluate_model(model):
     from transformers import GPT2LMHeadModel, GPT2TokenizerFast
@@ -732,6 +809,7 @@ def main():
     analysis_dir = os.path.join(cfg.save_dir, "analysis")
     dump_and_plot_scales(model, analysis_dir, epoch=0)
     plot_weight_distributions(model, analysis_dir, epoch=0)
+    plot_weight_channel_distributions(model, analysis_dir, epoch=0, channels_per_layer=4)
 
     model.train()
     print(f"Trainable parameters: {count_parameters(model)}")
@@ -798,6 +876,7 @@ def main():
         
         dump_and_plot_scales(model, analysis_dir, epoch=epoch+1)
         plot_weight_distributions(model, analysis_dir, epoch=epoch+1)
+        plot_weight_channel_distributions(model, analysis_dir, epoch=epoch+1, channels_per_layer=4)
 
         # Save model if best
         if ppl < best_ppl:
