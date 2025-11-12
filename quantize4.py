@@ -706,7 +706,7 @@ class TrainConfig:
     per_device_eval_batch_size: int = 20
     lr: float = 5e-5
     weight_decay: float = 0.01
-    num_epochs: int = 10
+    num_epochs: int = 3
     warmup_ratio: float = 0.06
     grad_accum_steps: int = 1
     seed: int = 42
