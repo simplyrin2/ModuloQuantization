@@ -185,7 +185,7 @@ class QuantLinear(nn.Module):
         return F.linear(x_q, w_q, self.bias)
 
     @torch.no_grad()
-    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.8):
+    def calibrate_modulus_from_data(self, xs: List[torch.Tensor], percentile: float = 0.5):
         """Calibrate λ from data statistics (per-tensor or per-channel).
            We set λ �~I~H percentile(|x|)."""
         # Activations
