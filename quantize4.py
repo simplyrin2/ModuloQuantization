@@ -11,6 +11,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import wandb
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Hugging Face
 from transformers import (
@@ -435,6 +439,125 @@ def collate_for_lm(batch, tokenizer, max_length=None):
         "attention_mask": attention_masks,
         "labels": labels,
     }
+    
+    
+# Weight distribution plotting
+
+@torch.no_grad()
+def _compute_weight_quant_triplet(m: "QuantLinear"):
+    """
+    For a QuantLinear with ModuloQuantizer:
+      - float weights: w
+      - integer quant: q = clip(round(w_tilde / S), -qmax, qmax)
+      - dequantized:  w_hat = S*q + quotient*(2λ)
+    """
+    # weights
+    w = m.weight.detach().cpu()  # [out, in]
+
+    # λ and qmax
+    lam = m.w_quant.lam.detach().cpu()  # () or [out]
+    qmax = m.w_quant.qmax
+
+    # broadcast λ per out channel if needed
+    if m.per_channel and lam.numel() > 1:
+        lam_b = lam.view(-1, 1)  # [out,1]
+    else:
+        lam_b = lam  # scalar
+
+    # Fold into [-λ, λ): w_tilde, and count periods with quotient
+    w_tilde = torch.remainder(w + lam_b, 2.0 * lam_b) - lam_b
+    quotient = torch.floor((w + lam_b) / (2.0 * lam_b))
+
+    # Uniform quant scale
+    S = lam_b / qmax
+    q = torch.clamp(torch.round(w_tilde / S), min=-qmax, max=qmax)
+    # Dequant following your forward()
+    w_hat = S * q + quotient * (2.0 * lam_b)
+    return w, q, w_hat
+
+
+@torch.no_grad()
+def plot_weight_distributions(model: nn.Module, out_dir: str, epoch: int):
+    os.makedirs(out_dir, exist_ok=True)
+    for name, module in model.named_modules():
+        if isinstance(module, QuantLinear):
+            try:
+                w, q, w_hat = _compute_weight_quant_triplet(module)
+                fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+                # float weights
+                ax.hist(w.flatten().numpy(), bins=100, alpha=0.5, label="float W")
+                # integer q (discrete bins centered on ints)
+                qmax = module.w_quant.qmax
+                q_bins = np.arange(-qmax - 0.5, qmax + 1.5, 1.0)
+                ax.hist(q.flatten().numpy(), bins=q_bins, alpha=0.5, label="int Q")
+                # dequantized weights
+                ax.hist(w_hat.flatten().numpy(), bins=100, alpha=0.5, label="dequant Ŵ")
+                ax.set_title(f"{name} weight distributions (epoch {epoch})")
+                ax.set_xlabel("value")
+                ax.set_ylabel("count")
+                ax.legend()
+                fig.tight_layout()
+                safe_name = name.replace(".", "_")
+                fig.savefig(os.path.join(out_dir, f"{safe_name}_weights_hist_epoch{epoch}.png"), dpi=150)
+                plt.close(fig)
+            except Exception as e:
+                print(f"[plot_weight_distributions] Skipped {name}: {e}")
+
+
+@torch.no_grad()
+def dump_and_plot_scales(model: nn.Module, out_dir: str, epoch: int, filename: str = None):
+    """
+    Dump λ (lambda) values and plot their distributions (weights and activations separately).
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    if filename is None:
+        filename = os.path.join(out_dir, f"lambda_values_epoch{epoch}.txt")
+
+    lines = []
+    all_w_lams = []
+    all_a_lams = []
+
+    for name, module in model.named_modules():
+        if isinstance(module, QuantLinear):
+            # Weight lambdas
+            lam_w = module.w_quant.lambda_param.detach().cpu().view(-1)
+            lines.append(f"{name}.w_lambda: " + " ".join(f"{v:.8g}" for v in lam_w.tolist()))
+            if lam_w.numel() > 0:
+                all_w_lams.append(lam_w)
+
+            # Activation lambdas (if present)
+            if module.a_quant is not None:
+                lam_a = module.a_quant.lambda_param.detach().cpu().view(-1)
+                lines.append(f"{name}.a_lambda: " + " ".join(f"{v:.8g}" for v in lam_a.tolist()))
+                if lam_a.numel() > 0:
+                    all_a_lams.append(lam_a)
+
+    with open(filename, "w") as f:
+        f.write("\n".join(lines))
+    print(f"Lambda values written to {filename}")
+
+    # Plot aggregated histograms
+    if len(all_w_lams) > 0:
+        wcat = torch.cat(all_w_lams).numpy()
+        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+        ax.hist(wcat, bins=100, alpha=0.8, color="tab:blue")
+        ax.set_title(f"Weight λ distribution (epoch {epoch})")
+        ax.set_xlabel("λ")
+        ax.set_ylabel("count")
+        fig.tight_layout()
+        fig.savefig(os.path.join(out_dir, f"lambda_weights_hist_epoch{epoch}.png"), dpi=150)
+        plt.close(fig)
+
+    if len(all_a_lams) > 0:
+        acat = torch.cat(all_a_lams).numpy()
+        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+        ax.hist(acat, bins=100, alpha=0.8, color="tab:orange")
+        ax.set_title(f"Activation λ distribution (epoch {epoch})")
+        ax.set_xlabel("λ")
+        ax.set_ylabel("count")
+        fig.tight_layout()
+        fig.savefig(os.path.join(out_dir, f"lambda_activations_hist_epoch{epoch}.png"), dpi=150)
+        plt.close(fig)
 
 def evaluate_model(model):
     from transformers import GPT2LMHeadModel, GPT2TokenizerFast
@@ -596,6 +719,10 @@ def main():
     # Log initial quantization parameters
     print("\nInitial quantization parameters after calibration:")
     log_quantization_params(model, step=0, verbose=True)
+    
+    analysis_dir = os.path.join(cfg.save_dir, "analysis")
+    dump_and_plot_scales(model, analysis_dir, epoch=0)
+    plot_weight_distributions(model, analysis_dir, epoch=0)
 
     model.train()
     print(f"Trainable parameters: {count_parameters(model)}")
@@ -659,6 +786,9 @@ def main():
         wandb.log(quant_stats)
 
         wandb.log({"epoch": epoch+1, "val_loss": avg_val_loss, "ppl": ppl, "step": step})
+        
+        dump_and_plot_scales(model, analysis_dir, epoch=epoch+1)
+        plot_weight_distributions(model, analysis_dir, epoch=epoch+1)
 
         # Save model if best
         if ppl < best_ppl:

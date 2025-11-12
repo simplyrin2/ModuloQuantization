@@ -539,9 +539,9 @@ def main():
                 optimizer.zero_grad(set_to_none=True)
                 step += 1
 
-                if step % cfg.log_scale_params_freq == 0:
-                    stats = log_scale_params(model, step=step, verbose=False)
-                    wandb.log(stats, step=step)
+                # if step % cfg.log_scale_params_freq == 0:
+                #     stats = log_scale_params(model, step=step, verbose=False)
+                #     wandb.log(stats, step=step)
 
             epoch_loss += loss.item()
             wandb.log({"train_loss": loss.item(), "step": step})
@@ -570,7 +570,7 @@ def main():
 
         print(f"\nScale parameters after epoch {epoch+1}:")
         stats = log_scale_params(model, step=step, verbose=True)
-        wandb.log(stats, step=step)
+        wandb.log(stats)
         wandb.log({"epoch": epoch+1, "val_loss": avg_val_loss, "ppl": ppl, "step": step})
 
         if ppl < best_ppl:
